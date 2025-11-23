@@ -210,7 +210,10 @@ async function parseImageWithGemini(file: File): Promise<ParseResult> {
     const base64Data = base64Image.split(',')[1]
     const mimeType = file.type || 'image/jpeg'
     
-    const API_KEY = "AIzaSyAa-8Cwh6_XixZemMocbQ3wRAI_KG_6KYE"
+    const API_KEY = import.meta.env.VITE_GEMINI_API_KEY
+    if (!API_KEY) {
+      throw new Error("Gemini API key not configured. Please add VITE_GEMINI_API_KEY to your environment variables.")
+    }
     const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`
     
     const promptText = `You are an expert chess analyst and handwriting recognition specialist. Your task is to carefully extract chess moves from this handwritten scoresheet image.
