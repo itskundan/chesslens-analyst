@@ -238,9 +238,8 @@ function fileToBase64(file: File): Promise<string> {
 
 function extractChessMoves(text: string): string {
   const normalizedText = text
-    .replace(/[oO0](-[oO0]){1,2}/g, (match) => {
-      return match.length > 4 ? 'O-O-O' : 'O-O'
-    })
+    .replace(/[0oO]-[0oO]-[0oO]/gi, 'O-O-O')
+    .replace(/[0oO]-[0oO]/gi, 'O-O')
     .replace(/\s+/g, ' ')
     .trim()
   
@@ -324,10 +323,17 @@ function isValidMove(move: string): boolean {
 }
 
 function cleanMove(move: string): string {
-  return move
-    .replace(/^0-0-0$/i, 'O-O-O')
-    .replace(/^0-0$/i, 'O-O')
-    .trim()
+  let cleaned = move.trim()
+  
+  if (/^[0oO]-[0oO]-[0oO]$/i.test(cleaned)) {
+    return 'O-O-O'
+  }
+  
+  if (/^[0oO]-[0oO]$/i.test(cleaned)) {
+    return 'O-O'
+  }
+  
+  return cleaned
 }
 
 function validatePgn(pgn: string): boolean {
@@ -360,14 +366,21 @@ function validatePgnWithDetails(pgn: string): { valid: boolean; failedAt?: strin
         continue
       }
       
-      const cleanToken = token.replace(/\d+\./g, '').trim()
+      let cleanToken = token.replace(/\d+\./g, '').trim()
       if (!cleanToken) continue
+      
+      if (/^[0oO]-[0oO]-[0oO]$/i.test(cleanToken)) {
+        cleanToken = 'O-O-O'
+      } else if (/^[0oO]-[0oO]$/i.test(cleanToken)) {
+        cleanToken = 'O-O'
+      }
       
       try {
         testGame.move(cleanToken)
         partialMoves.push(cleanToken)
-      } catch {
+      } catch (moveError) {
         failedAtMove = token
+        console.error(`Failed to validate move "${token}" (cleaned: "${cleanToken}")`, moveError)
         break
       }
     }
