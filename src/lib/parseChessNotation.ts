@@ -121,15 +121,20 @@ async function parseImageWithGemini(file: File): Promise<ParseResult> {
 CRITICAL REQUIREMENTS:
 1. Extract moves in standard algebraic notation (e.g., e4, Nf3, Bxc6, O-O)
 2. Format as: 1. e4 e5 2. Nf3 Nc6 3. Bb5 a6
-3. Use O-O for kingside castling and O-O-O for queenside (capital letter O, not zero)
+3. For castling moves:
+   - Kingside castling: Use O-O (capital letter O, NOT zero 0)
+   - Queenside castling: Use O-O-O (capital letter O, NOT zero 0)
+   - NEVER use 0-0 or 0-0-0 (zeros are wrong!)
 4. Include move numbers followed by a period and space
 5. Separate white and black moves with spaces
 6. Return ONLY the raw PGN moves without any formatting, code blocks, or explanations
 7. Do NOT wrap in markdown code blocks
 8. Do NOT add any text before or after the moves
 9. If no chess notation found, return exactly: NO_NOTATION_FOUND
+10. Double check that every move is valid and makes sense in sequence
+11. If a move looks unclear or suspicious, skip it rather than guessing
 
-Example correct format: 1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6
+Example correct format: 1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7
 
 Extract the moves now:`
 
@@ -174,6 +179,9 @@ Extract the moves now:`
       .replace(/```\s*/g, '')
       .replace(/\*\*/g, '')
       .replace(/##\s*/g, '')
+      .replace(/[0０]/g, 'O')
+      .replace(/([OoO0０])\s*-\s*([OoO0０])\s*-\s*([OoO0О])/gi, 'O-O-O')
+      .replace(/([OoO0０])\s*-\s*([OoO0０])/gi, 'O-O')
       .trim()
 
     const cleanedText = extractChessMoves(geminiResponse)
@@ -349,7 +357,11 @@ function validatePgn(pgn: string): boolean {
 function validatePgnWithDetails(pgn: string): { valid: boolean; failedAt?: string; partialPgn?: string; moveCount: number } {
   try {
     const testGame = new Chess()
-    testGame.loadPgn(pgn)
+    const cleanedPgn = pgn
+      .replace(/[0oO]-[0oO]-[0oO]/g, 'O-O-O')
+      .replace(/[0oO]-[0oO]/g, 'O-O')
+    
+    testGame.loadPgn(cleanedPgn)
     const moveCount = Math.ceil(testGame.history().length / 2)
     return { valid: true, moveCount }
   } catch (error) {
@@ -357,12 +369,14 @@ function validatePgnWithDetails(pgn: string): { valid: boolean; failedAt?: strin
     const testGame = new Chess()
     let partialMoves: string[] = []
     let failedAtMove = ""
+    let currentMoveNumber = 1
     
     for (let i = 0; i < moves.length; i++) {
       const token = moves[i].trim()
       if (!token) continue
       
       if (/^\d+\.$/.test(token)) {
+        currentMoveNumber = parseInt(token)
         continue
       }
       
@@ -376,11 +390,19 @@ function validatePgnWithDetails(pgn: string): { valid: boolean; failedAt?: strin
       }
       
       try {
-        testGame.move(cleanToken)
+        const legalMoves = testGame.moves({ verbose: true })
+        const attemptedMove = testGame.move(cleanToken)
+        
+        if (!attemptedMove) {
+          throw new Error(`Illegal move`)
+        }
+        
         partialMoves.push(cleanToken)
       } catch (moveError) {
-        failedAtMove = token
-        console.error(`Failed to validate move "${token}" (cleaned: "${cleanToken}")`, moveError)
+        failedAtMove = `${token} (move ${currentMoveNumber})`
+        console.error(`Failed to validate move "${token}" (cleaned: "${cleanToken}") at move ${currentMoveNumber}`)
+        console.error("Legal moves were:", testGame.moves())
+        console.error("Error:", moveError)
         break
       }
     }
