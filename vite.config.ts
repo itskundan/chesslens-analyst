@@ -11,9 +11,6 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    // DO NOT REMOVE
-    createIconImportProxy() as PluginOption,
-    sparkPlugin({ port: devPort }) as PluginOption,
   ],
   resolve: {
     alias: {
