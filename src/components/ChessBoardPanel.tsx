@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card"
 import { Chessboard } from "react-chessboard"
 import { Chess } from "chess.js"
 import type { Square, Move } from "chess.js"
-import type { PieceDropHandlerArgs, SquareHandlerArgs } from "react-chessboard/dist/types"
+import type { PieceDropHandlerArgs, SquareHandlerArgs, PieceHandlerArgs } from "react-chessboard/dist/types"
 import type { LastMove } from "@/types/chess"
 
 interface ChessBoardPanelProps {
@@ -93,7 +93,8 @@ export function ChessBoardPanel({
     showLegalTargets(normalizedSquare)
   }, [selectedSquare, legalTargets, onPieceDrop, clearHighlights, showLegalTargets])
 
-  const handleSquareMouseDown = useCallback(({ square }: SquareHandlerArgs) => {
+  const handlePieceDrag = useCallback(({ square }: PieceHandlerArgs) => {
+    if (!square) return
     showLegalTargets(square as Square)
   }, [showLegalTargets])
 
@@ -173,8 +174,8 @@ export function ChessBoardPanel({
     squareStyles,
     onPieceDrop: handleDrop,
     onSquareClick: handleSquareClick,
-    onSquareMouseDown: handleSquareMouseDown,
-  }), [position, handleDrop, squareStyles, handleSquareClick, handleSquareMouseDown])
+    onPieceDrag: handlePieceDrag,
+  }), [position, handleDrop, squareStyles, handleSquareClick, handlePieceDrag])
 
   return (
     <Card className={`p-6 ${borderClass} transition-all duration-200`}>
