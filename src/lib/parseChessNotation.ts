@@ -187,12 +187,6 @@ Extract the moves now:`
       .replace(/##\s*/g, '')
       .trim()
     
-    geminiResponse = geminiResponse
-      .replace(/(\d+\.)\s*0\s*-\s*0\s*-\s*0/g, '$1 O-O-O')
-      .replace(/(\d+\.)\s*0\s*-\s*0/g, '$1 O-O')
-      .replace(/\s+0\s*-\s*0\s*-\s*0\s+/g, ' O-O-O ')
-      .replace(/\s+0\s*-\s*0\s+/g, ' O-O ')
-    
     geminiResponse = normalizeCastling(geminiResponse)
 
     const cleanedText = extractChessMoves(geminiResponse)
@@ -262,20 +256,14 @@ function normalizeCastling(text: string): string {
     .replace(/[oО]\s*-\s*[oО]\s*-\s*[oО]/gi, 'O-O-O')
     .replace(/[oО]\s*-\s*[oО]/gi, 'O-O')
   
-  normalized = normalized.replace(/\bO\s+-\s+O\s+-\s+O\b/g, 'O-O-O')
-  normalized = normalized.replace(/\bO\s+-\s+O\b/g, 'O-O')
+  normalized = normalized.replace(/\bO\s*-\s*O\s*-\s*O\b/g, 'O-O-O')
+  normalized = normalized.replace(/\bO\s*-\s*O\b/g, 'O-O')
   
   return normalized
 }
 
 function extractChessMoves(text: string): string {
-  let normalizedText = text
-    .replace(/0\s*-\s*0\s*-\s*0/gi, 'O-O-O')
-    .replace(/0\s*-\s*0/gi, 'O-O')
-    .replace(/[oО]\s*-\s*[oО]\s*-\s*[oО]/gi, 'O-O-O')
-    .replace(/[oО]\s*-\s*[oО]/gi, 'O-O')
-    .replace(/\bO\s+-\s+O\s+-\s+O\b/g, 'O-O-O')
-    .replace(/\bO\s+-\s+O\b/g, 'O-O')
+  let normalizedText = normalizeCastling(text)
     .replace(/\s+/g, ' ')
     .trim()
   
@@ -345,48 +333,27 @@ function isValidMove(move: string): boolean {
   if (!move || move.length < 2) return false
   
   const cleanedMove = move.replace(/[+#?!]/g, '').trim()
+  const normalizedMove = normalizeCastling(cleanedMove)
   
-  if (/^(O-O-O|O-O)$/i.test(cleanedMove)) {
+  if (/^(O-O-O|O-O)$/i.test(normalizedMove)) {
     return true
   }
   
-  if (/^(0-0-0|0-0)$/.test(cleanedMove)) {
-    return true
-  }
-  
-  if (!/[a-h][1-8]/.test(cleanedMove)) {
+  if (!/[a-h][1-8]/.test(normalizedMove)) {
     return false
   }
   
   const validPattern = /^[NBRQK]?[a-h]?[1-8]?x?[a-h][1-8](?:=[NBRQ])?$/i
-  return validPattern.test(cleanedMove)
+  return validPattern.test(normalizedMove)
 }
 
 function cleanMove(move: string): string {
   let cleaned = move.trim()
   
-  if (/^0\s*-\s*0\s*-\s*0$/i.test(cleaned)) {
-    return 'O-O-O'
-  }
+  cleaned = normalizeCastling(cleaned)
   
-  if (/^0\s*-\s*0$/i.test(cleaned)) {
-    return 'O-O'
-  }
-  
-  if (/^[oО]\s*-\s*[oО]\s*-\s*[oО]$/i.test(cleaned)) {
-    return 'O-O-O'
-  }
-  
-  if (/^[oО]\s*-\s*[oО]$/i.test(cleaned)) {
-    return 'O-O'
-  }
-  
-  if (/O\s+-\s+O\s+-\s+O/.test(cleaned)) {
-    return 'O-O-O'
-  }
-  
-  if (/O\s+-\s+O/.test(cleaned)) {
-    return 'O-O'
+  if (/^(O-O-O|O-O)$/i.test(cleaned)) {
+    return cleaned.toUpperCase()
   }
   
   return cleaned
@@ -403,15 +370,19 @@ function validatePgn(pgn: string): boolean {
 }
 
 function validatePgnWithDetails(pgn: string): { valid: boolean; failedAt?: string; partialPgn?: string; moveCount: number } {
-  try {
-    const testGame = new Chess()
-    let cleanedPgn = pgn
+  const normalizeCastlingInText = (text: string): string => {
+    return text
       .replace(/0\s*-\s*0\s*-\s*0/g, 'O-O-O')
       .replace(/0\s*-\s*0/g, 'O-O')
       .replace(/[oО]\s*-\s*[oО]\s*-\s*[oО]/gi, 'O-O-O')
       .replace(/[oО]\s*-\s*[oО]/gi, 'O-O')
       .replace(/\bO\s+-\s+O\s+-\s+O\b/g, 'O-O-O')
       .replace(/\bO\s+-\s+O\b/g, 'O-O')
+  }
+  
+  try {
+    const testGame = new Chess()
+    const cleanedPgn = normalizeCastlingInText(pgn)
     
     testGame.loadPgn(cleanedPgn)
     const moveCount = Math.ceil(testGame.history().length / 2)
@@ -422,14 +393,7 @@ function validatePgnWithDetails(pgn: string): { valid: boolean; failedAt?: strin
     let failedAtMove = ""
     let currentMoveNumber = 1
     
-    let cleanedPgn = pgn
-      .replace(/0\s*-\s*0\s*-\s*0/g, 'O-O-O')
-      .replace(/0\s*-\s*0/g, 'O-O')
-      .replace(/[oО]\s*-\s*[oО]\s*-\s*[oО]/gi, 'O-O-O')
-      .replace(/[oО]\s*-\s*[oО]/gi, 'O-O')
-      .replace(/\bO\s+-\s+O\s+-\s+O\b/g, 'O-O-O')
-      .replace(/\bO\s+-\s+O\b/g, 'O-O')
-    
+    const cleanedPgn = normalizeCastlingInText(pgn)
     const moves = cleanedPgn.split(/\s+/)
     
     for (let i = 0; i < moves.length; i++) {
@@ -443,6 +407,8 @@ function validatePgnWithDetails(pgn: string): { valid: boolean; failedAt?: strin
       
       let cleanToken = token.replace(/\d+\./g, '').trim()
       if (!cleanToken) continue
+      
+      cleanToken = normalizeCastlingInText(cleanToken)
       
       try {
         const attemptedMove = testGame.move(cleanToken)

@@ -76,6 +76,12 @@ export function useChessGame() {
           .replace(/```\s*/g, '')
           .replace(/\*\*/g, '')
           .replace(/##\s*/g, '')
+          .replace(/0\s*-\s*0\s*-\s*0/g, 'O-O-O')
+          .replace(/0\s*-\s*0/g, 'O-O')
+          .replace(/[oО]\s*-\s*[oО]\s*-\s*[oО]/gi, 'O-O-O')
+          .replace(/[oО]\s*-\s*[oО]/gi, 'O-O')
+          .replace(/\bO\s*-\s*O\s*-\s*O\b/g, 'O-O-O')
+          .replace(/\bO\s*-\s*O\b/g, 'O-O')
           .trim()
         
         console.log("Cleaned PGN:", cleanPgn)
