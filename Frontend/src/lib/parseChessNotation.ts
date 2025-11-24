@@ -8,6 +8,8 @@ export interface ParseResult {
   error?: string
   movesFound?: number
   isPartial?: boolean
+  totalMovesInImage?: number
+  imageQualityWarning?: string
 }
 
 function formatHistoryAsPgn(history: string[]): string {
@@ -181,13 +183,11 @@ export async function parseImage(file: File): Promise<ParseResult> {
     const cleanedText = extractChessMoves(text)
 
     if (!cleanedText) {
-      console.log("Tesseract OCR failed to extract valid PGN, falling back to Gemini vision API...")
       return await parseImageWithGemini(file)
     }
 
     const validationResult = validatePgnWithDetails(cleanedText)
     if (!validationResult.valid) {
-      console.log("Tesseract OCR failed to extract valid PGN, falling back to Gemini vision API...")
       return await parseImageWithGemini(file)
     }
 
@@ -199,7 +199,6 @@ export async function parseImage(file: File): Promise<ParseResult> {
       movesFound: moveCount,
     }
   } catch (error) {
-    console.log("Tesseract OCR error, falling back to Gemini vision API...")
     return await parseImageWithGemini(file)
   }
 }
@@ -223,6 +222,7 @@ async function parseImageWithGemini(file: File): Promise<ParseResult> {
 - Each row = one complete move pair (White's move + Black's move)
 - Move numbers are in the leftmost column
 - Read row by row: move number → White's move → Black's move
+- CRITICALLY IMPORTANT: Extract ALL visible moves from the image, even if handwriting is unclear
 
 🔍 STEP-BY-STEP EXTRACTION PROCESS:
 
@@ -277,15 +277,18 @@ After extracting all moves, review the complete game:
 5. Each move must be LEGAL in the sequence
 
 📤 OUTPUT FORMAT:
-Return ONLY the PGN moves in this format:
-1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7
+Return a JSON object with this structure:
+{
+  "moves": "1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7",
+  "totalMoves": 7,
+  "confidence": "high"
+}
 
 Rules for output:
-- NO markdown formatting or code blocks
-- NO explanations or commentary
-- NO line breaks between moves
-- Just move numbers, dots, and moves separated by spaces
-- If no chess notation found, return: NO_NOTATION_FOUND
+- moves: PGN notation with move numbers, dots, and moves separated by spaces
+- totalMoves: Total number of move pairs you can see in the scoresheet (count all rows with moves)
+- confidence: "high" if all moves are clear, "medium" if some are unclear, "low" if handwriting is very difficult
+- If no chess notation found, return: {"moves": "NO_NOTATION_FOUND", "totalMoves": 0, "confidence": "low"}
 
 🎯 QUALITY CHECK:
 Before returning your answer:
@@ -326,33 +329,50 @@ Now carefully extract the moves from this scoresheet image:`
     const data = await response.json()
     let geminiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || ""
     
-    if (geminiResponse === "NO_NOTATION_FOUND" || geminiResponse.length < 5) {
+    // Try to parse as JSON first
+    let extractedMoves = ""
+    let totalMovesInImage = 0
+    let confidence = "unknown"
+    
+    try {
+      // Remove markdown code blocks if present
+      const jsonMatch = geminiResponse.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0])
+        extractedMoves = parsed.moves || ""
+        totalMovesInImage = parsed.totalMoves || 0
+        confidence = parsed.confidence || "unknown"
+      } else {
+        // Fallback to treating response as plain PGN
+        extractedMoves = geminiResponse
+      }
+    } catch {
+      // If JSON parsing fails, treat as plain PGN
+      extractedMoves = geminiResponse
+    }
+    
+    if (extractedMoves === "NO_NOTATION_FOUND" || extractedMoves.length < 5) {
       return {
         success: false,
         error: "Could not detect chess notation in image. Please ensure the image is clear and contains standard algebraic notation.",
       }
     }
 
-    geminiResponse = geminiResponse
+    extractedMoves = extractedMoves
       .replace(/```pgn\s*/gi, '')
       .replace(/```\s*/g, '')
       .replace(/\*\*/g, '')
       .replace(/##\s*/g, '')
       .trim()
     
-    geminiResponse = normalizeCastling(geminiResponse)
+    extractedMoves = normalizeCastling(extractedMoves)
 
     // If Gemini returned properly formatted PGN (starts with "1."), use it directly
-    let cleanedText = geminiResponse
+    let cleanedText = extractedMoves
     if (!/^1\.\s+/.test(cleanedText)) {
       // Otherwise, try to extract moves from unformatted text
-      cleanedText = extractChessMoves(geminiResponse)
+      cleanedText = extractChessMoves(extractedMoves)
     }
-    
-    console.log("=== CHESS NOTATION EXTRACTION DEBUG ===")
-    console.log("Gemini raw response:", geminiResponse)
-    console.log("After extractChessMoves:", cleanedText)
-    console.log("======================================")
     
     if (!cleanedText || cleanedText.length < 5) {
       return {
@@ -363,15 +383,20 @@ Now carefully extract the moves from this scoresheet image:`
 
     const validationResult = validatePgnWithDetails(cleanedText)
     if (!validationResult.valid) {
-      console.error("Extracted PGN failed validation at move:", validationResult.failedAt)
-      console.error("Full PGN:", cleanedText)
       
       if (validationResult.partialPgn && validationResult.moveCount > 0) {
+        // Only show warning if we know total moves and didn't get them all
+        const warningMessage = totalMovesInImage > 0 && validationResult.moveCount < totalMovesInImage
+          ? `Only ${validationResult.moveCount} of ${totalMovesInImage} moves could be extracted from the image. Some moves may be unclear due to handwriting. Consider re-uploading a clearer image for complete game analysis.`
+          : undefined
+        
         return {
           success: true,
           pgn: validationResult.partialPgn,
           movesFound: validationResult.moveCount,
           isPartial: true,
+          totalMovesInImage: totalMovesInImage > 0 ? totalMovesInImage : undefined,
+          imageQualityWarning: warningMessage,
         }
       }
       
@@ -382,11 +407,20 @@ Now carefully extract the moves from this scoresheet image:`
     }
 
     const moveCount = (cleanedText.match(/\d+\./g) || []).length
+    
+    // Only show warning if we have total count AND didn't extract all moves
+    let warningMessage: string | undefined = undefined
+    if (totalMovesInImage > 0 && moveCount < totalMovesInImage) {
+      warningMessage = `Only ${moveCount} of ${totalMovesInImage} moves were extracted from the image. Some moves may be unclear due to handwriting. Consider uploading a clearer image for complete game analysis.`
+    }
 
     return {
       success: true,
       pgn: cleanedText,
       movesFound: moveCount,
+      isPartial: moveCount < totalMovesInImage,
+      totalMovesInImage: totalMovesInImage > 0 ? totalMovesInImage : undefined,
+      imageQualityWarning: warningMessage,
     }
   } catch (error) {
     console.error("Gemini API error:", error)
@@ -701,22 +735,12 @@ function validatePgnWithDetails(pgn: string): { valid: boolean; failedAt?: strin
         const correctedMove = tryOcrCorrections(cleanToken, testGame)
         
         if (correctedMove) {
-          console.log(`Auto-corrected "${cleanToken}" to "${correctedMove}"`)
           partialMoves.push(correctedMove)
           testGame.move(correctedMove)
           continue
         }
         
         failedAtMove = `${token} (move ${currentMoveNumber})`
-        console.error(`=== MOVE VALIDATION FAILED ===`)
-        console.error(`Original token: "${token}"`)
-        console.error(`Cleaned token: "${cleanToken}"`)
-        console.error(`Move number: ${currentMoveNumber}`)
-        console.error(`Current position FEN: ${testGame.fen()}`)
-        console.error(`Legal moves available:`, testGame.moves())
-        console.error(`Error:`, moveError)
-        console.error(`Successful moves so far:`, partialMoves)
-        console.error(`==============================`)
         break
       }
     }

@@ -112,7 +112,6 @@ export function useChessGame() {
   const loadPgn = useCallback(
     (pgn: string) => {
       try {
-        console.log("Attempting to load PGN:", pgn)
         const newGame = new Chess()
         
         const cleanPgn = pgn
@@ -128,8 +127,6 @@ export function useChessGame() {
           .replace(/\bO\s*-\s*O\b/g, 'O-O')
           .trim()
         
-        console.log("Cleaned PGN:", cleanPgn)
-        
         newGame.loadPgn(cleanPgn)
         
         const allMoves = newGame.history()
@@ -139,11 +136,8 @@ export function useChessGame() {
         }))
         
         if (recordedMoves.length === 0) {
-          console.error("No moves loaded from PGN")
           return false
         }
-        
-        console.log(`Successfully loaded ${recordedMoves.length} moves`)
         
         historyRef.current = recordedMoves
         setGame(newGame)
@@ -152,7 +146,7 @@ export function useChessGame() {
         setIsInAnalysisMode(false)
         return true
       } catch (error) {
-        console.error("Error loading PGN:", error)
+        // Silent fail - errors are handled at upload level
         return false
       }
     },

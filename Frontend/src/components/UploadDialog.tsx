@@ -8,10 +8,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
+import { GameLoadingOverlay } from "@/components/GameLoadingOverlay"
 import { UploadSimple, Warning, CheckCircle, Info } from "@phosphor-icons/react"
 import {
   parseCSV,
@@ -23,8 +23,10 @@ import {
 interface UploadDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onGameLoaded: (pgn: string) => void
+  onGameLoaded: (pgn: string, warning?: string) => void
 }
+
+type LoadingStage = "uploading" | "extracting" | "validating" | "complete"
 
 export function UploadDialog({
   open,
@@ -32,7 +34,7 @@ export function UploadDialog({
   onGameLoaded,
 }: UploadDialogProps) {
   const [isProcessing, setIsProcessing] = useState(false)
-  const [processingStatus, setProcessingStatus] = useState<string>("")
+  const [loadingStage, setLoadingStage] = useState<LoadingStage>("uploading")
   const [result, setResult] = useState<ParseResult | null>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [inputMode, setInputMode] = useState<"file" | "pgn">("file")
@@ -44,7 +46,7 @@ export function UploadDialog({
     if (file) {
       setSelectedFile(file)
       setResult(null)
-      setProcessingStatus("")
+      setLoadingStage("uploading")
     }
   }
 
@@ -53,7 +55,10 @@ export function UploadDialog({
 
     setIsProcessing(true)
     setResult(null)
-    setProcessingStatus("Processing file...")
+    setLoadingStage("uploading")
+    
+    // Close the dialog immediately when upload starts
+    onOpenChange(false)
 
     try {
       let parseResult: ParseResult
@@ -61,8 +66,11 @@ export function UploadDialog({
       const fileType = selectedFile.type
       const fileName = selectedFile.name.toLowerCase()
 
+      // Simulate a small delay for the "uploading" stage to be visible
+      await new Promise(resolve => setTimeout(resolve, 500))
+
       if (fileType === "text/csv" || fileName.endsWith(".csv")) {
-        setProcessingStatus("Parsing CSV file...")
+        setLoadingStage("extracting")
         parseResult = await parseCSV(selectedFile)
       } else if (
         fileName.endsWith(".pgn") ||
@@ -70,7 +78,7 @@ export function UploadDialog({
         fileType === "application/vnd.chess-pgn" ||
         fileType === "text/plain"
       ) {
-        setProcessingStatus("Parsing PGN file...")
+        setLoadingStage("extracting")
         const text = await selectedFile.text()
         parseResult = await parsePgnTextInput(text)
       } else if (
@@ -79,7 +87,7 @@ export function UploadDialog({
         fileName.endsWith(".jpg") ||
         fileName.endsWith(".jpeg")
       ) {
-        setProcessingStatus("Extracting text from image with OCR...")
+        setLoadingStage("extracting")
         parseResult = await parseImage(selectedFile)
       } else {
         parseResult = {
@@ -88,19 +96,30 @@ export function UploadDialog({
         }
       }
 
+      setLoadingStage("validating")
+      await new Promise(resolve => setTimeout(resolve, 800))
+
+      setLoadingStage("complete")
+      await new Promise(resolve => setTimeout(resolve, 1200))
+
       setResult(parseResult)
 
       if (parseResult.success && parseResult.pgn) {
-        onGameLoaded(parseResult.pgn)
+        onGameLoaded(parseResult.pgn, parseResult.imageQualityWarning)
+      } else if (parseResult.error) {
+        // Show error toast if parsing failed
+        alert(parseResult.error)
       }
     } catch (error) {
-      setResult({
+      const errorResult = {
         success: false,
         error: `Unexpected error: ${error}`,
-      })
+      }
+      setResult(errorResult)
+      alert(errorResult.error)
     } finally {
       setIsProcessing(false)
-      setProcessingStatus("")
+      setLoadingStage("uploading")
     }
   }
 
@@ -109,23 +128,34 @@ export function UploadDialog({
 
       setIsProcessing(true)
       setResult(null)
-      setProcessingStatus("Validating PGN text...")
+      setLoadingStage("validating")
+      
+      // Close the dialog immediately when processing starts
+      onOpenChange(false)
 
       try {
         const parseResult = await parsePgnTextInput(pgnInput)
+        
+        setLoadingStage("complete")
+        await new Promise(resolve => setTimeout(resolve, 800))
+        
         setResult(parseResult)
 
         if (parseResult.success && parseResult.pgn) {
-          onGameLoaded(parseResult.pgn)
+          onGameLoaded(parseResult.pgn, parseResult.imageQualityWarning)
+        } else if (parseResult.error) {
+          alert(parseResult.error)
         }
       } catch (error) {
-        setResult({
+        const errorResult = {
           success: false,
           error: `Unexpected error: ${error}`,
-        })
+        }
+        setResult(errorResult)
+        alert(errorResult.error)
       } finally {
         setIsProcessing(false)
-        setProcessingStatus("")
+        setLoadingStage("uploading")
       }
     }
 
@@ -133,7 +163,7 @@ export function UploadDialog({
       const mode = value === "pgn" ? "pgn" : "file"
       setInputMode(mode)
       setResult(null)
-      setProcessingStatus("")
+      setLoadingStage("uploading")
       setIsProcessing(false)
     }
 
@@ -141,7 +171,7 @@ export function UploadDialog({
     setSelectedFile(null)
     setResult(null)
     setIsProcessing(false)
-    setProcessingStatus("")
+    setLoadingStage("uploading")
       setPgnInput("")
       setInputMode("file")
     onOpenChange(false)
@@ -168,7 +198,10 @@ export function UploadDialog({
     }
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <>
+      <GameLoadingOverlay isLoading={isProcessing} stage={loadingStage} />
+      
+      <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[520px] max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Upload Chess Game</DialogTitle>
@@ -226,21 +259,6 @@ export function UploadDialog({
               </TabsContent>
             </Tabs>
 
-          {isProcessing && (
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">{processingStatus}</p>
-              <Progress value={undefined} className="w-full" />
-              {processingStatus.includes("AI") && (
-                <Alert className="transition-all duration-200">
-                  <Info size={18} weight="regular" />
-                  <AlertDescription className="text-xs">
-                    Using AI vision model for enhanced accuracy...
-                  </AlertDescription>
-                </Alert>
-              )}
-            </div>
-          )}
-
           {result && !isProcessing && (
             <Alert
               variant={result.success ? "default" : "destructive"}
@@ -254,7 +272,9 @@ export function UploadDialog({
               <AlertDescription>
                 {result.success
                   ? result.isPartial
-                    ? `Loaded ${result.movesFound} move(s) - some moves could not be validated. Click "Done" to analyze.`
+                    ? result.totalMovesInImage
+                      ? `Partial extraction: Loaded ${result.movesFound} of ${result.totalMovesInImage} moves. ${result.imageQualityWarning || 'Some moves may be unclear.'}`
+                      : `Loaded ${result.movesFound} move(s) - some moves could not be validated. Click "Done" to analyze.`
                     : `Successfully loaded ${result.movesFound} move(s). Click "Done" to start analyzing.`
                   : result.error}
               </AlertDescription>
@@ -275,5 +295,6 @@ export function UploadDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    </>
   )
 }

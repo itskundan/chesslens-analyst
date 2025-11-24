@@ -4,13 +4,25 @@ import { ChessBoardPanel } from "@/components/ChessBoardPanel"
 import { MoveListPanel } from "@/components/MoveListPanel"
 import { NavigationControls } from "@/components/NavigationControls"
 import { UploadDialog } from "@/components/UploadDialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { useChessGame } from "@/hooks/useChessGame"
 import { useAutoPlay } from "@/hooks/useAutoPlay"
 import { toast } from "sonner"
+import { Warning } from "@phosphor-icons/react"
 import type { Square } from "chess.js"
 
 function App() {
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
+  const [qualityWarning, setQualityWarning] = useState<string | null>(null)
+  const [showWarningDialog, setShowWarningDialog] = useState(false)
   const {
     gameState,
     makeMove,
@@ -35,11 +47,20 @@ function App() {
     setUploadDialogOpen(true)
   }
 
-  const handleGameLoaded = (pgn: string) => {
+  const handleGameLoaded = (pgn: string, warning?: string) => {
     const success = loadPgn(pgn)
     if (success) {
       toast.success("Game loaded successfully!")
       setUploadDialogOpen(false)
+      
+      // Only show warning dialog if there's actually a quality issue
+      if (warning) {
+        setQualityWarning(warning)
+        setShowWarningDialog(true)
+      } else {
+        setQualityWarning(null)
+        setShowWarningDialog(false)
+      }
     } else {
       toast.error("Failed to load game. Please check the notation format.")
     }
@@ -99,6 +120,27 @@ function App() {
         onOpenChange={setUploadDialogOpen}
         onGameLoaded={handleGameLoaded}
       />
+      
+      <AlertDialog open={showWarningDialog} onOpenChange={setShowWarningDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 rounded-full">
+                <Warning size={24} weight="fill" className="text-yellow-600 dark:text-yellow-500" />
+              </div>
+              <AlertDialogTitle>Image Quality Warning</AlertDialogTitle>
+            </div>
+            <AlertDialogDescription className="text-base">
+              {qualityWarning}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setShowWarningDialog(false)}>
+              Okay, I Understand
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
