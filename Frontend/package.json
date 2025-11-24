@@ -1,20 +1,19 @@
 {
-    "name": "spark-template",
+    "name": "nf3-pro",
     "private": true,
-    "version": "0.0.0",
+    "version": "1.0.0",
     "type": "module",
+    "description": "A corporate-grade chess analysis tool with CSV, OCR, and interactive game replay",
+    "author": "Kundan",
+    "license": "MIT",
     "scripts": {
         "dev": "vite --port 5173",
-        "kill": "fuser -k 5000/tcp",
-        "build": "tsc -b --noCheck && vite build",
+        "build": "tsc -b && vite build",
         "lint": "eslint .",
-        "optimize": "vite optimize",
         "preview": "vite preview"
     },
     "dependencies": {
-        "@heroicons/react": "^2.2.0",
         "@hookform/resolvers": "^4.1.3",
-        "@octokit/core": "^6.1.4",
         "@phosphor-icons/react": "^2.1.7",
         "@radix-ui/colors": "^3.0.0",
         "@radix-ui/react-accordion": "^1.2.3",
@@ -50,7 +49,6 @@
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "cmdk": "^1.1.1",
-        "d3": "^7.9.0",
         "date-fns": "^3.6.0",
         "embla-carousel-react": "^8.5.2",
         "framer-motion": "^12.6.2",
@@ -58,7 +56,6 @@
         "lucide-react": "^0.484.0",
         "marked": "^15.0.7",
         "next-themes": "^0.4.6",
-        "octokit": "^4.1.2",
         "papaparse": "^5.5.3",
         "react": "^19.0.0",
         "react-chessboard": "^5.8.4",
@@ -71,9 +68,7 @@
         "sonner": "^2.0.1",
         "tailwind-merge": "^3.0.2",
         "tesseract.js": "^6.0.1",
-        "three": "^0.175.0",
         "tw-animate-css": "^1.2.4",
-        "uuid": "^11.1.0",
         "vaul": "^1.1.2",
         "zod": "^3.25.76"
     },
@@ -92,10 +87,5 @@
         "typescript": "~5.7.2",
         "typescript-eslint": "^8.38.0",
         "vite": "^6.4.1"
-    },
-    "workspaces": {
-        "packages": [
-            "packages/*"
-        ]
     }
 }

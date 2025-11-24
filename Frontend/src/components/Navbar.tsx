@@ -11,7 +11,7 @@ export function Navbar({ onUploadClick }: NavbarProps) {
       <div className="flex h-16 items-center justify-between px-6">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            ChessLens Analyst
+            NF3 Pro
           </h1>
         </div>
         <Button

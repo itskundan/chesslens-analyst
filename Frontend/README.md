@@ -1,4 +1,4 @@
-# ChessLens Analyst
+# NF3 Pro
 
 A corporate-grade chess analysis tool built with React, TypeScript, and Tailwind CSS. Analyze games from multiple sources including CSV files, images with OCR, and manual play.
 
@@ -87,7 +87,7 @@ The app includes three famous games for demonstration:
 
 ## Design Philosophy
 
-ChessLens follows an "Enterprise Minimalist" design approach:
+NF3 Pro follows an "Enterprise Minimalist" design approach:
 - Professional typography using system fonts
 - High-contrast color scheme for optimal readability
 - Subtle animations (200-300ms) that serve functional purposes
